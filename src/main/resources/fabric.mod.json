@@ -1,0 +1,26 @@
+{
+	"schemaVersion": 1,
+	"id": "deeds",
+	"version": "${version}",
+	"name": "Minecraft Deeds",
+	"description": "Claim land with deeds. Built for a small private server with friends.",
+	"authors": [
+		"bagelmaster"
+	],
+	"contact": {
+		"sources": "https://github.com/bagelmaster/minecraft-deeds"
+	},
+	"license": "All-Rights-Reserved",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.bagelmaster.deeds.Deeds"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
