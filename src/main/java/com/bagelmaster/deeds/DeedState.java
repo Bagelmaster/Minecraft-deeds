@@ -1,15 +1,12 @@
 package com.bagelmaster.deeds;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.world.PersistentState;
 import net.minecraft.world.PersistentStateType;
 
@@ -23,13 +20,13 @@ import net.minecraft.world.PersistentStateType;
  * </ul>
  *
  * <p>The data ends up in {@code <world>/data/deeds.dat}. We keep a single state for the whole
- * server (stored with the Overworld) and use the dimension as part of each key, so claims in
+ * server (stored with the Overworld); each plot remembers its own dimension, so claims in
  * the Nether and End live in the same file.
  */
 public class DeedState extends PersistentState {
 	/** On disk, claims are stored as a plain list. */
 	public static final Codec<DeedState> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-			Claim.CODEC.listOf().fieldOf("claims").forGetter(DeedState::toList)
+			Claim.CODEC.listOf().fieldOf("claims").forGetter(state -> state.claims)
 	).apply(instance, DeedState::fromList));
 
 	/**
@@ -43,8 +40,11 @@ public class DeedState extends PersistentState {
 			null
 	);
 
-	/** In memory, claims are kept in a map so lookups by chunk are fast. */
-	private final Map<ChunkKey, Claim> claims = new HashMap<>();
+	/**
+	 * Every claim on the server. A plain list is fine for a small server: looking up a
+	 * position just walks the list.
+	 */
+	private final List<Claim> claims = new ArrayList<>();
 
 	/** Creates an empty state. Used when the server has no deeds.dat yet. */
 	public DeedState() {
@@ -55,27 +55,36 @@ public class DeedState extends PersistentState {
 		return server.getOverworld().getPersistentStateManager().getOrCreate(TYPE);
 	}
 
-	/** Returns the claim for the chunk, or {@code null} if nobody owns it. */
-	public Claim getClaim(ChunkKey chunk) {
-		return claims.get(chunk);
+	/** Returns the claim covering the block column at (x, z), or {@code null} if nobody owns it. */
+	public Claim getClaimAt(String dimension, int x, int z) {
+		for (Claim claim : claims) {
+			if (claim.plot().contains(dimension, x, z)) {
+				return claim;
+			}
+		}
+		return null;
 	}
 
-	/** Records the chunk as owned by the player. Callers must check it is unclaimed first. */
-	public void claim(ChunkKey chunk, ServerPlayerEntity owner) {
-		claims.put(chunk, Claim.of(chunk, owner));
+	/** Returns an existing claim that overlaps the plot, or {@code null} if the plot is free. */
+	public Claim findOverlapping(Plot plot) {
+		for (Claim claim : claims) {
+			if (claim.plot().overlaps(plot)) {
+				return claim;
+			}
+		}
+		return null;
+	}
+
+	/** Records a new claim. Callers must check for overlaps first. */
+	public void add(Claim claim) {
+		claims.add(claim);
 		// Without this, Minecraft would assume nothing changed and skip saving.
 		markDirty();
 	}
 
-	private List<Claim> toList() {
-		return new ArrayList<>(claims.values());
-	}
-
 	private static DeedState fromList(List<Claim> list) {
 		DeedState state = new DeedState();
-		for (Claim claim : list) {
-			state.claims.put(claim.chunk(), claim);
-		}
+		state.claims.addAll(list);
 		return state;
 	}
 }

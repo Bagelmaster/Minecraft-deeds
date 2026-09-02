@@ -15,8 +15,8 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
  * The {@code /deed} command and its sub-commands.
  *
  * <pre>
- *   /deed claim   claims the chunk you are standing in
- *   /deed info    shows who owns the chunk you are standing in
+ *   /deed claim   claims the plot you selected with the survey tool (a stick)
+ *   /deed info    shows who owns the plot you are standing in
  * </pre>
  */
 public final class DeedCommand {
@@ -35,36 +35,43 @@ public final class DeedCommand {
 		ServerCommandSource source = context.getSource();
 		// Throws a friendly "must be run by a player" error if run from the console.
 		ServerPlayerEntity player = source.getPlayerOrThrow();
-		ChunkKey chunk = ChunkKey.of(source.getWorld(), player.getChunkPos());
 
+		SurveyTool.Selection selection = SurveyTool.getSelection(player);
+		if (selection == null || !selection.isComplete()) {
+			source.sendError(Text.literal("Select a plot first: with a stick, left-click one corner and right-click the opposite corner."));
+			return 0;
+		}
+
+		Plot plot = Plot.fromCorners(selection.dimension, selection.first, selection.second);
 		DeedState deeds = DeedState.get(source.getServer());
-		Claim existing = deeds.getClaim(chunk);
 
-		if (existing != null) {
-			if (existing.isOwnedBy(player)) {
-				source.sendError(Text.literal("You already own this chunk."));
+		Claim overlapping = deeds.findOverlapping(plot);
+		if (overlapping != null) {
+			if (overlapping.isOwnedBy(player)) {
+				source.sendError(Text.literal("That overlaps a plot you already own."));
 			} else {
-				source.sendError(Text.literal("This chunk is already claimed by " + existing.ownerName() + "."));
+				source.sendError(Text.literal("That overlaps a plot owned by " + overlapping.ownerName() + "."));
 			}
 			return 0;
 		}
 
-		deeds.claim(chunk, player);
-		source.sendFeedback(() -> Text.literal("You now own " + chunk + "."), false);
+		deeds.add(Claim.of(plot, player));
+		SurveyTool.clearSelection(player);
+		source.sendFeedback(() -> Text.literal("You now own " + plot + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int info(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
 		ServerCommandSource source = context.getSource();
 		ServerPlayerEntity player = source.getPlayerOrThrow();
-		ChunkKey chunk = ChunkKey.of(source.getWorld(), player.getChunkPos());
 
-		Claim claim = DeedState.get(source.getServer()).getClaim(chunk);
+		String dimension = source.getWorld().getRegistryKey().getValue().toString();
+		Claim claim = DeedState.get(source.getServer()).getClaimAt(dimension, player.getBlockX(), player.getBlockZ());
 
 		if (claim == null) {
-			source.sendFeedback(() -> Text.literal("Unclaimed: " + chunk), false);
+			source.sendFeedback(() -> Text.literal("Unclaimed."), false);
 		} else {
-			source.sendFeedback(() -> Text.literal("Owner: " + claim.ownerName() + " (" + chunk + ")"), false);
+			source.sendFeedback(() -> Text.literal("Owner: " + claim.ownerName() + " (" + claim.plot() + ")"), false);
 		}
 		return Command.SINGLE_SUCCESS;
 	}

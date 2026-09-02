@@ -21,17 +21,22 @@ https://fabricmc.net/develop for newer ones.
 5. Later: container protection, claim limits, deed transfer
 
 ## Status
-Scaffolded and building. First feature is in:
+Scaffolded and building. Freeform plot claims are in:
 
-- `/deed claim` claims the chunk you are standing in.
-  Claiming a chunk someone else owns is rejected.
-- `/deed info` prints the owner of the current chunk, or
-  "Unclaimed".
-- Claims are saved in `<world>/data/deeds.dat` (keyed by
-  dimension + chunk position) and survive restarts.
+- Survey tool: a plain stick for now. Hold it in your main
+  hand, left-click a block for the first corner and
+  right-click a block for the opposite corner. Plots are
+  rectangles in X/Z and cover every Y level.
+- `/deed claim` claims the selected plot. It is rejected if
+  it overlaps any existing plot (yours or someone else's).
+- `/deed info` prints the owner of the plot you are standing
+  in, or "Unclaimed".
+- Claims are saved in `<world>/data/deeds.dat` (dimension +
+  plot corners + owner) and survive restarts. Selections are
+  not saved; they only live until you claim or log out.
 
-Not done yet: survey tool / custom parcel sizes, trust
-lists, protection.
+Not done yet: trust lists, protection, plot size limits, a
+custom survey item.
 
 ## Code tour
 All code is server-side and lives in
@@ -39,11 +44,12 @@ All code is server-side and lives in
 
 | File | What it does |
 | --- | --- |
-| `Deeds.java` | Mod entry point. Registers the command. |
+| `Deeds.java` | Mod entry point. Registers the survey tool and the command. |
+| `SurveyTool.java` | Listens for stick clicks and remembers each player's two corners. |
 | `DeedCommand.java` | The `/deed claim` and `/deed info` commands. |
 | `DeedState.java` | Saves and loads all claims (Minecraft `PersistentState`). |
-| `Claim.java` | One claimed chunk: where it is and who owns it. |
-| `ChunkKey.java` | Dimension + chunk coordinates, used as the map key. |
+| `Claim.java` | One claimed plot: where it is and who owns it. |
+| `Plot.java` | A rectangle in one dimension, with overlap and contains checks. |
 
 ## Building
 ```
@@ -69,16 +75,19 @@ Loom sets up run configurations for you, no manual install needed.
    The first run downloads Minecraft and may take a few minutes.
    The game files live in `run/` (git-ignored).
 3. In the client, create a singleplayer world (or join the dev
-   server). Then try:
+   server). Grab a stick (`/give @s stick`), left-click one
+   corner block and right-click the opposite corner, then:
    ```
-   /deed info
    /deed claim
    /deed info
    ```
-   Walk to another chunk (F3 shows chunk coordinates) and repeat.
-4. To test "someone else owns it", run the dev server, join with
-   two accounts, or check that `deeds.dat` exists under
-   `run/saves/<world>/data/` after leaving the world.
+   Step outside the plot and run `/deed info` again. Try
+   selecting a plot that overlaps the first one to see it
+   rejected.
+4. To test "someone else owns it", run the dev server and join
+   with two accounts. To check saving, leave the world and look
+   for `deeds.dat` under `run/saves/<world>/data/`, then rejoin
+   and run `/deed info` inside the plot.
 
 If you need readable Minecraft sources for browsing in the IDE,
 run `./gradlew genSources` once.
