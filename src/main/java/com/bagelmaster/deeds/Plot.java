@@ -3,7 +3,7 @@ package com.bagelmaster.deeds;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
 
 /**
  * A rectangle of land in one dimension, from (minX, minZ) to (maxX, maxZ) inclusive.

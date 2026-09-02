@@ -5,10 +5,11 @@ claim land with deeds. Built for a small private server
 with friends.
 
 ## Target
-- Minecraft 1.21.11 (the last 1.21.x release)
-- Fabric Loader 0.19.3 + Fabric API 0.141.6+1.21.11
-- Yarn mappings 1.21.11+build.6, Fabric Loom 1.17
-- Java 21, Gradle 9.5.1 (via the included wrapper)
+- Minecraft 26.2
+- Fabric Loader 0.19.3 + Fabric API 0.158.0+26.2
+- Fabric Loom 1.17. No mappings: 26.x ships with Mojang's
+  real class names, so the code uses those directly.
+- Java 25, Gradle 9.5.1 (via the included wrapper)
 
 Versions live in `gradle.properties`. Check
 https://fabricmc.net/develop for newer ones.
@@ -31,7 +32,7 @@ Scaffolded and building. Freeform plot claims are in:
   it overlaps any existing plot (yours or someone else's).
 - `/deed info` prints the owner of the plot you are standing
   in, or "Unclaimed".
-- Claims are saved in `<world>/data/deeds.dat` (dimension +
+- Claims are saved in the world's `data` folder (dimension +
   plot corners + owner) and survive restarts. Selections are
   not saved; they only live until you claim or log out.
 
@@ -47,7 +48,7 @@ All code is server-side and lives in
 | `Deeds.java` | Mod entry point. Registers the survey tool and the command. |
 | `SurveyTool.java` | Listens for stick clicks and remembers each player's two corners. |
 | `DeedCommand.java` | The `/deed claim` and `/deed info` commands. |
-| `DeedState.java` | Saves and loads all claims (Minecraft `PersistentState`). |
+| `DeedState.java` | Saves and loads all claims (Minecraft `SavedData`). |
 | `Claim.java` | One claimed plot: where it is and who owns it. |
 | `Plot.java` | A rectangle in one dimension, with overlap and contains checks. |
 
@@ -55,7 +56,8 @@ All code is server-side and lives in
 ```
 ./gradlew build
 ```
-The finished mod jar is written to `build/libs/deeds-<version>.jar`.
+You need Java 25 installed. The finished mod jar is written to
+`build/libs/deeds-<version>.jar`.
 Drop it (plus the Fabric API jar) into a Fabric server's `mods/`
 folder to use it. Every push also runs this build on GitHub
 Actions (see the "build" workflow).
@@ -85,8 +87,7 @@ Loom sets up run configurations for you, no manual install needed.
    selecting a plot that overlaps the first one to see it
    rejected.
 4. To test "someone else owns it", run the dev server and join
-   with two accounts. To check saving, leave the world and look
-   for `deeds.dat` under `run/saves/<world>/data/`, then rejoin
+   with two accounts. To check saving, leave the world, rejoin,
    and run `/deed info` inside the plot.
 
 If you need readable Minecraft sources for browsing in the IDE,

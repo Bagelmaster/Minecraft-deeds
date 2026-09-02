@@ -4,15 +4,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.Items;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
@@ -49,46 +49,46 @@ public final class SurveyTool {
 	/** Hooks the tool into Fabric's block click events. Called once from {@link Deeds}. */
 	public static void register() {
 		// Left-click = first corner. Returning SUCCESS also stops the block from being broken.
-		AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
+		AttackBlockCallback.EVENT.register((player, level, hand, pos, side) -> {
 			if (!isHoldingTool(player, hand)) {
-				return ActionResult.PASS;
+				return InteractionResult.PASS;
 			}
-			if (player instanceof ServerPlayerEntity serverPlayer) {
-				setCorner(serverPlayer, world, pos, true);
+			if (player instanceof ServerPlayer serverPlayer) {
+				setCorner(serverPlayer, level, pos, true);
 			}
-			return ActionResult.SUCCESS;
+			return InteractionResult.SUCCESS;
 		});
 
 		// Right-click = second corner. Returning SUCCESS also stops chests, doors etc. from opening.
-		UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+		UseBlockCallback.EVENT.register((player, level, hand, hitResult) -> {
 			if (!isHoldingTool(player, hand)) {
-				return ActionResult.PASS;
+				return InteractionResult.PASS;
 			}
-			if (player instanceof ServerPlayerEntity serverPlayer) {
-				setCorner(serverPlayer, world, hitResult.getBlockPos(), false);
+			if (player instanceof ServerPlayer serverPlayer) {
+				setCorner(serverPlayer, level, hitResult.getBlockPos(), false);
 			}
-			return ActionResult.SUCCESS;
+			return InteractionResult.SUCCESS;
 		});
 	}
 
 	/** Returns the player's current selection, or {@code null} if they haven't clicked anything. */
-	public static Selection getSelection(ServerPlayerEntity player) {
-		return SELECTIONS.get(player.getUuid());
+	public static Selection getSelection(ServerPlayer player) {
+		return SELECTIONS.get(player.getUUID());
 	}
 
 	/** Forgets the player's selection, e.g. after a successful claim. */
-	public static void clearSelection(ServerPlayerEntity player) {
-		SELECTIONS.remove(player.getUuid());
+	public static void clearSelection(ServerPlayer player) {
+		SELECTIONS.remove(player.getUUID());
 	}
 
-	private static boolean isHoldingTool(PlayerEntity player, Hand hand) {
+	private static boolean isHoldingTool(Player player, InteractionHand hand) {
 		// Only react to the main hand, otherwise one click fires twice (once per hand).
-		return hand == Hand.MAIN_HAND && player.getStackInHand(hand).isOf(ITEM);
+		return hand == InteractionHand.MAIN_HAND && player.getItemInHand(hand).is(ITEM);
 	}
 
-	private static void setCorner(ServerPlayerEntity player, World world, BlockPos pos, boolean first) {
-		String dimension = world.getRegistryKey().getValue().toString();
-		Selection selection = SELECTIONS.computeIfAbsent(player.getUuid(), uuid -> new Selection());
+	private static void setCorner(ServerPlayer player, Level level, BlockPos pos, boolean first) {
+		String dimension = level.dimension().identifier().toString();
+		Selection selection = SELECTIONS.computeIfAbsent(player.getUUID(), uuid -> new Selection());
 
 		// A plot can't span dimensions, so switching dimension starts a fresh selection.
 		if (!dimension.equals(selection.dimension)) {
@@ -107,6 +107,6 @@ public final class SurveyTool {
 		String next = selection.isComplete()
 				? " Run /deed claim to claim it."
 				: (first ? " Now right-click the opposite corner." : " Now left-click the opposite corner.");
-		player.sendMessage(Text.literal(which + " corner set at " + pos.getX() + ", " + pos.getZ() + "." + next), false);
+		player.sendSystemMessage(Component.literal(which + " corner set at " + pos.getX() + ", " + pos.getZ() + "." + next));
 	}
 }

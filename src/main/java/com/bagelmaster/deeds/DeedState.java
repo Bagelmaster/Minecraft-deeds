@@ -6,35 +6,37 @@ import java.util.List;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.PersistentState;
-import net.minecraft.world.PersistentStateType;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.world.level.saveddata.SavedDataType;
 
 /**
  * All claims on the server, saved to disk so they survive restarts.
  *
- * <p>Minecraft's {@link PersistentState} system handles the actual file I/O. We only need to:
+ * <p>Minecraft's {@link SavedData} system handles the actual file I/O. We only need to:
  * <ul>
  *   <li>describe how to convert this object to and from NBT (the {@link #CODEC}), and</li>
- *   <li>call {@link #markDirty()} whenever something changes so Minecraft knows to save it.</li>
+ *   <li>call {@link #setDirty()} whenever something changes so Minecraft knows to save it.</li>
  * </ul>
  *
- * <p>The data ends up in {@code <world>/data/deeds.dat}. We keep a single state for the whole
- * server (stored with the Overworld); each plot remembers its own dimension, so claims in
- * the Nether and End live in the same file.
+ * <p>The data is written to the Overworld's {@code data} folder. We keep a single state for
+ * the whole server; each plot remembers its own dimension, so claims in the Nether and End
+ * live in the same file.
  */
-public class DeedState extends PersistentState {
+public class DeedState extends SavedData {
 	/** On disk, claims are stored as a plain list. */
 	public static final Codec<DeedState> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			Claim.CODEC.listOf().fieldOf("claims").forGetter(state -> state.claims)
 	).apply(instance, DeedState::fromList));
 
 	/**
-	 * Tells Minecraft the file name ("deeds"), how to make an empty state, and how to
+	 * Tells Minecraft the file name ("deeds:claims"), how to make an empty state, and how to
 	 * read/write it. The last argument is for Mojang's data fixers, which we don't use.
 	 */
-	public static final PersistentStateType<DeedState> TYPE = new PersistentStateType<>(
-			Deeds.MOD_ID,
+	public static final SavedDataType<DeedState> TYPE = new SavedDataType<>(
+			Identifier.fromNamespaceAndPath(Deeds.MOD_ID, "claims"),
 			DeedState::new,
 			CODEC,
 			null
@@ -46,13 +48,19 @@ public class DeedState extends PersistentState {
 	 */
 	private final List<Claim> claims = new ArrayList<>();
 
-	/** Creates an empty state. Used when the server has no deeds.dat yet. */
+	/** Creates an empty state. Used when the server has no saved claims yet. */
 	public DeedState() {
 	}
 
 	/** Fetches the shared claim data for this server, loading it from disk the first time. */
 	public static DeedState get(MinecraftServer server) {
-		return server.getOverworld().getPersistentStateManager().getOrCreate(TYPE);
+		ServerLevel overworld = server.getLevel(ServerLevel.OVERWORLD);
+		if (overworld == null) {
+			throw new IllegalStateException("The Overworld is not loaded, cannot access deeds");
+		}
+		// The first call creates an empty DeedState (or loads it from disk); later calls
+		// return that same object.
+		return overworld.getDataStorage().computeIfAbsent(TYPE);
 	}
 
 	/** Returns the claim covering the block column at (x, z), or {@code null} if nobody owns it. */
@@ -79,7 +87,7 @@ public class DeedState extends PersistentState {
 	public void add(Claim claim) {
 		claims.add(claim);
 		// Without this, Minecraft would assume nothing changed and skip saving.
-		markDirty();
+		setDirty();
 	}
 
 	private static DeedState fromList(List<Claim> list) {

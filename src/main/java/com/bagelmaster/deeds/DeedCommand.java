@@ -2,12 +2,11 @@ package com.bagelmaster.deeds;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.context.CommandContext;
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 
@@ -26,19 +25,23 @@ public final class DeedCommand {
 	/** Hooks our command into the server's command tree. Called once from {@link Deeds}. */
 	public static void register() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-				dispatcher.register(CommandManager.literal("deed")
-						.then(CommandManager.literal("claim").executes(DeedCommand::claim))
-						.then(CommandManager.literal("info").executes(DeedCommand::info))));
+				dispatcher.register(Commands.literal("deed")
+						.then(Commands.literal("claim").executes(DeedCommand::claim))
+						.then(Commands.literal("info").executes(DeedCommand::info))));
 	}
 
-	private static int claim(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
-		ServerCommandSource source = context.getSource();
-		// Throws a friendly "must be run by a player" error if run from the console.
-		ServerPlayerEntity player = source.getPlayerOrThrow();
+	private static int claim(CommandContext<CommandSourceStack> context) {
+		CommandSourceStack source = context.getSource();
+		ServerPlayer player = source.getPlayer();
+		if (player == null) {
+			// The command was run from the server console or a command block.
+			source.sendFailure(Component.literal("Only players can claim plots."));
+			return 0;
+		}
 
 		SurveyTool.Selection selection = SurveyTool.getSelection(player);
 		if (selection == null || !selection.isComplete()) {
-			source.sendError(Text.literal("Select a plot first: with a stick, left-click one corner and right-click the opposite corner."));
+			source.sendFailure(Component.literal("Select a plot first: with a stick, left-click one corner and right-click the opposite corner."));
 			return 0;
 		}
 
@@ -48,30 +51,34 @@ public final class DeedCommand {
 		Claim overlapping = deeds.findOverlapping(plot);
 		if (overlapping != null) {
 			if (overlapping.isOwnedBy(player)) {
-				source.sendError(Text.literal("That overlaps a plot you already own."));
+				source.sendFailure(Component.literal("That overlaps a plot you already own."));
 			} else {
-				source.sendError(Text.literal("That overlaps a plot owned by " + overlapping.ownerName() + "."));
+				source.sendFailure(Component.literal("That overlaps a plot owned by " + overlapping.ownerName() + "."));
 			}
 			return 0;
 		}
 
 		deeds.add(Claim.of(plot, player));
 		SurveyTool.clearSelection(player);
-		source.sendFeedback(() -> Text.literal("You now own " + plot + "."), false);
+		source.sendSuccess(() -> Component.literal("You now own " + plot + "."), false);
 		return Command.SINGLE_SUCCESS;
 	}
 
-	private static int info(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
-		ServerCommandSource source = context.getSource();
-		ServerPlayerEntity player = source.getPlayerOrThrow();
+	private static int info(CommandContext<CommandSourceStack> context) {
+		CommandSourceStack source = context.getSource();
+		ServerPlayer player = source.getPlayer();
+		if (player == null) {
+			source.sendFailure(Component.literal("Only players can check plots."));
+			return 0;
+		}
 
-		String dimension = source.getWorld().getRegistryKey().getValue().toString();
+		String dimension = source.getLevel().dimension().identifier().toString();
 		Claim claim = DeedState.get(source.getServer()).getClaimAt(dimension, player.getBlockX(), player.getBlockZ());
 
 		if (claim == null) {
-			source.sendFeedback(() -> Text.literal("Unclaimed."), false);
+			source.sendSuccess(() -> Component.literal("Unclaimed."), false);
 		} else {
-			source.sendFeedback(() -> Text.literal("Owner: " + claim.ownerName() + " (" + claim.plot() + ")"), false);
+			source.sendSuccess(() -> Component.literal("Owner: " + claim.ownerName() + " (" + claim.plot() + ")"), false);
 		}
 		return Command.SINGLE_SUCCESS;
 	}
